@@ -1,0 +1,58 @@
+{
+  "name": "@taleswords/player",
+  "version": "0.0.0",
+  "description": "Embeddable Taleswords story player: a one-script-tag bundle for static sites, plus components for the major frontend frameworks.",
+  "license": "MIT",
+  "author": "Taleswords",
+  "homepage": "https://github.com/taleswords/taleswords-player#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/taleswords/taleswords-player.git"
+  },
+  "bugs": {
+    "url": "https://github.com/taleswords/taleswords-player/issues"
+  },
+  "keywords": [
+    "taleswords",
+    "interactive-fiction",
+    "story-player",
+    "embeddable"
+  ],
+  "type": "module",
+  "main": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./build/index.d.ts",
+      "import": "./build/index.js"
+    },
+    "./components": {
+      "types": "./build/components.d.ts",
+      "import": "./build/components.js"
+    },
+    "./browser": {
+      "types": "./build/browser.d.ts",
+      "import": "./build/browser.js"
+    }
+  },
+  "files": [
+    "build/**/*"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "del ./build/",
+    "build": "npm run clean && tsc",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "del-cli": "^7.0.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

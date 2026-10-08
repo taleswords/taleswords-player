@@ -28,6 +28,9 @@ readerLink('my-project-id', 'https://stories.example.org')
 
 ## Development
 
+This repository is also carried inside the private Taleswords monorepo as a `git subtree` under `packages/player`; work done there is pushed here. Every source file is MIT and opens with `// SPDX-License-Identifier: MIT` — the test suite enforces it.
+
+
 Requires Node 20 or newer.
 
 ```sh

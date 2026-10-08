@@ -22,6 +22,8 @@ function sources(dir: string): string[] {
 
 describe('license headers', () => {
     const files = [...sources(join(root, 'src')), ...sources(join(root, 'test'))]
+    // this file names the notice it forbids
+    const scanned = files.filter((file) => file !== fileURLToPath(import.meta.url))
 
     it('finds the sources', () => {
         expect(files.length).toBeGreaterThan(0)
@@ -31,7 +33,7 @@ describe('license headers', () => {
         expect(readFileSync(file, 'utf8').split('\n', 1)[0]).toBe(SPDX)
     })
 
-    it.each(files.map((file) => [file.slice(root.length + 1), file]))('%s carries no proprietary notice', (_name, file) => {
+    it.each(scanned.map((file) => [file.slice(root.length + 1), file]))('%s carries no proprietary notice', (_name, file) => {
         expect(readFileSync(file, 'utf8')).not.toMatch(PROPRIETARY)
     })
 })

@@ -21,6 +21,8 @@
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",
+  "unpkg": "./build/player.iife.js",
+  "jsdelivr": "./build/player.iife.js",
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
@@ -47,12 +49,23 @@
   },
   "scripts": {
     "clean": "del ./build/",
-    "build": "npm run clean && tsc",
+    "build": "npm run clean && tsc && vite build",
     "test": "vitest run"
+  },
+  "peerDependencies": {
+    "vue": "^3.3.0"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "del-cli": "^7.0.0",
+    "happy-dom": "^20.14.6",
     "typescript": "~5.9.3",
-    "vitest": "^4.0.18"
+    "vite": "^8.3.4",
+    "vitest": "^4.0.18",
+    "vue": "^3.5.43"
   }
 }

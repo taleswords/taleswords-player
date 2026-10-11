@@ -11,7 +11,8 @@ const buildDir = join(root, 'build')
 
 const ENTRIES = ['index', 'contract', 'reader', 'components', 'browser']
 const SUFFIXES = ['.js', '.d.ts', '.js.map', '.d.ts.map']
-const EXPECTED_BUILD_FILES = ENTRIES.flatMap((entry) => SUFFIXES.map((suffix) => `${entry}${suffix}`)).sort()
+const BUNDLE = 'player.iife.js'
+const EXPECTED_BUILD_FILES = [...ENTRIES.flatMap((entry) => SUFFIXES.map((suffix) => `${entry}${suffix}`)), BUNDLE].sort()
 
 type PackageJson = Record<string, unknown>
 type PackResult = { files: Array<{ path: string }> }
@@ -68,6 +69,17 @@ describe('@taleswords/player package', () => {
                 expect(existsSync(join(root, file!)), `${subpath} ${condition} -> ${file}`).toBe(true)
             }
         }
+    })
+
+    it('declares vue as an optional peer so an embed-only install takes no Vue', () => {
+        const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as PackageJson
+        expect(pkg.peerDependencies).toEqual({ vue: '^3.3.0' })
+        expect(pkg.peerDependenciesMeta).toEqual({ vue: { optional: true } })
+
+        const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8')) as {
+            packages: Record<string, PackageJson>
+        }
+        expect(lock.packages['']!.peerDependenciesMeta).toEqual({ vue: { optional: true } })
     })
 })
 

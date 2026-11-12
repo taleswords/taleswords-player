@@ -1,13 +1,13 @@
 # @taleswords/player
 
-Embeddable [Taleswords](https://github.com/taleswords) story player: a one-script-tag bundle for static sites, plus a Vue 3 component.
+Embeddable [Taleswords](https://github.com/taleswords) story player: one script tag for any website, or a React or Vue 3 component. It plays published interactive stories; it is read-only and carries no credentials.
 
-> **Status: pre-release.** The package currently ships the runtime read contract (the types every Taleswords runtime endpoint answers with) and the reader URL helper. It also ships the browser mount API (`@taleswords/player/browser`, `mount(element, options)`), the browser bundle `build/player.iife.js`, which exposes the `TaleswordsPlayer` global, and the Vue 3 `TaleswordsPlayer` component (`@taleswords/player/components`). Nothing is published to npm yet.
+> **Status: pre-release.** The package currently ships the runtime read contract (the types every Taleswords runtime endpoint answers with) and the reader URL helper. It also ships the browser mount API (`@taleswords/player/browser`, `mount(element, options)`), the browser bundle `build/player.iife.js`, which exposes the `TaleswordsPlayer` global, the Vue 3 `TaleswordsPlayer` component (`@taleswords/player/components`) and the React `TaleswordsPlayer` component (`@taleswords/player/react`). Nothing is published to npm yet.
 
 ## What it does
 
 - **Static sites:** load one script, `build/player.iife.js`, call `TaleswordsPlayer.mount(element, { projectId, apiBase })` with an element and a project id, and the published story plays there. No build step on the host page. This is the supported path for every site not on Vue 3.3 or later: see [Who can install what](#who-can-install-what).
-- **Frameworks:** the Vue 3 `TaleswordsPlayer` component in `@taleswords/player/components` is a thin component around that same mount API, which mounts and unmounts cleanly.
+- **Frameworks:** the Vue 3 `TaleswordsPlayer` component in `@taleswords/player/components` and the React `TaleswordsPlayer` component in `@taleswords/player/react` are thin components around that same mount API, which mount and unmount cleanly.
 - **Read-only:** the player only reads published stories. It carries no authoring code and no credentials.
 
 ## What is here today
@@ -25,6 +25,7 @@ readerLink('my-project-id', 'https://stories.example.org')
 | `@taleswords/player` | runtime contract types, `readerLink`, `READER_PATH_PATTERN` |
 | `@taleswords/player/browser` | the browser mount API: `mount(element, options)`, returning `{ unmount, ready }`; also the `TaleswordsPlayer` global of `build/player.iife.js` |
 | `@taleswords/player/components` | framework components: the Vue 3 `TaleswordsPlayer` component (see [Vue component](#vue-component)) |
+| `@taleswords/player/react` | the React `TaleswordsPlayer` component: the props `projectId`, `apiBase`, `copy` and `onState`, with the same meanings as the mount options |
 
 The mount API and the browser bundle are documented under [Mount options](#mount-options).
 
@@ -36,7 +37,9 @@ The mount API and the browser bundle are documented under [Mount options](#mount
 
 The package declares `vue` as an optional peer dependency with the range `^3.3.0`. The `Player Vue Floor` CI job in the TalesWords repository installs the lowest version that range allows and runs this package's specs against it.
 
-**Every other site, including Vue 3 sites below 3.3, Vue 2 sites and React-only sites,** uses the plain CDN / browser embed. It is the supported path for those sites and needs no npm install. Load the script, then call `TaleswordsPlayer.mount(element, { projectId, apiBase })`:
+**A site on React 18 or 19** installs `@taleswords/player` from npm, once a release is published, and uses the `TaleswordsPlayer` component from `@taleswords/player/react`. The package declares `react` as an optional peer dependency with the range `^18.0.0 || ^19.0.0`. Its specs run against React 19 only: React 18 is declared and not yet tested.
+
+**Every other site, including Vue 3 sites below 3.3, Vue 2 sites and React sites below 18,** uses the plain CDN / browser embed. It is the supported path for those sites and needs no npm install. Load the script, then call `TaleswordsPlayer.mount(element, { projectId, apiBase })`:
 
 ```html
 <script src="https://unpkg.com/@taleswords/player/build/player.iife.js"></script>

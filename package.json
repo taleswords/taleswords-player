@@ -1,7 +1,7 @@
 {
   "name": "@taleswords/player",
-  "version": "0.0.0",
-  "description": "Embeddable Taleswords story player: a one-script-tag bundle for static sites, plus a Vue 3 component.",
+  "version": "0.1.0",
+  "description": "Embeddable Taleswords story player: one script tag for any website, or a React or Vue 3 component. Plays published interactive stories; read-only, no credentials.",
   "license": "MIT",
   "author": "Taleswords",
   "homepage": "https://github.com/taleswords/taleswords-player#readme",
@@ -16,7 +16,11 @@
     "taleswords",
     "interactive-fiction",
     "story-player",
-    "embeddable"
+    "embeddable",
+    "interactive-story",
+    "embed",
+    "react",
+    "vue"
   ],
   "type": "module",
   "main": "./build/index.js",

@@ -1,6 +1,6 @@
 {
   "name": "@taleswords/player",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Embeddable Taleswords story player: one script tag for any website, or a React or Vue 3 component. Plays published interactive stories; read-only, no credentials.",
   "license": "MIT",
   "author": "Taleswords",

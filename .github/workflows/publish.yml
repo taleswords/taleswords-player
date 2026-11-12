@@ -19,6 +19,8 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+      # npm's trusted publishing needs npm 11.5.1 or later; Node 22 ships npm 10.
+      - run: npm install -g npm@latest
       - run: npm ci
       - run: npm test
 
@@ -30,6 +32,21 @@ jobs:
             exit 1
           fi
 
+      # A release published by hand is tagged afterwards, so its tag finds the version
+      # already on npm: the run then ends green and publishes nothing.
+      - name: Is this version on npm already
+        id: npm
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          if [ "$(npm view "${NAME}@${VERSION}" version 2>/dev/null)" = "${VERSION}" ]; then
+            echo "${NAME}@${VERSION} is on npm already: nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # No credential is held here: publishing relies on npm trusted publishing
       # (id-token), configured for this repository on npmjs.com before the first tag.
-      - run: npm publish --provenance
+      - if: steps.npm.outputs.published != 'true'
+        run: npm publish --provenance

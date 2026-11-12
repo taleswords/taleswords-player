@@ -2,7 +2,7 @@
 
 Embeddable [Taleswords](https://github.com/taleswords) story player: one script tag for any website, or a React or Vue 3 component. It plays published interactive stories; it is read-only and carries no credentials.
 
-> **Status: pre-release.** The package currently ships the runtime read contract (the types every Taleswords runtime endpoint answers with) and the reader URL helper. It also ships the browser mount API (`@taleswords/player/browser`, `mount(element, options)`), the browser bundle `build/player.iife.js`, which exposes the `TaleswordsPlayer` global, the Vue 3 `TaleswordsPlayer` component (`@taleswords/player/components`) and the React `TaleswordsPlayer` component (`@taleswords/player/react`). Nothing is published to npm yet.
+> **Status: published on npm as `@taleswords/player`.** The package ships the runtime read contract (the types every Taleswords runtime endpoint answers with) and the reader URL helper. It also ships the browser mount API (`@taleswords/player/browser`, `mount(element, options)`), the browser bundle `build/player.iife.js`, which exposes the `TaleswordsPlayer` global, the Vue 3 `TaleswordsPlayer` component (`@taleswords/player/components`) and the React `TaleswordsPlayer` component (`@taleswords/player/react`).
 
 ## What it does
 
@@ -33,11 +33,40 @@ The mount API and the browser bundle are documented under [Mount options](#mount
 
 `@taleswords/player` is one package. Its wrappers are not split into packages of their own.
 
-**A site on Vue 3.3 or later** installs `@taleswords/player` from npm, once a release is published, and uses the `TaleswordsPlayer` component from `@taleswords/player/components`.
+**A site on Vue 3.3 or later** installs `@taleswords/player` from npm and uses the `TaleswordsPlayer` component from `@taleswords/player/components`.
 
 The package declares `vue` as an optional peer dependency with the range `^3.3.0`. The `Player Vue Floor` CI job in the TalesWords repository installs the lowest version that range allows and runs this package's specs against it.
 
-**A site on React 18 or 19** installs `@taleswords/player` from npm, once a release is published, and uses the `TaleswordsPlayer` component from `@taleswords/player/react`. The package declares `react` as an optional peer dependency with the range `^18.0.0 || ^19.0.0`. Its specs run against React 19 only: React 18 is declared and not yet tested.
+**A site on React 18 or 19** installs `@taleswords/player` from npm and uses the `TaleswordsPlayer` component from `@taleswords/player/react`. The package declares `react` as an optional peer dependency with the range `^18.0.0 || ^19.0.0`. Its specs run against React 19 only: React 18 is declared and not yet tested.
+
+**A site on Angular** installs `@taleswords/player` from npm and mounts the player through the framework-free mount API, `mount` from `@taleswords/player/browser`, in a small component of its own. The package ships no Angular component; this is the whole of one:
+
+```ts
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core'
+import { mount, type PlayerHandle } from '@taleswords/player/browser'
+
+@Component({
+  selector: 'app-tale',
+  template: '<div #host></div>',
+})
+export class Tale implements AfterViewInit, OnDestroy {
+  @ViewChild('host') host!: ElementRef<HTMLDivElement>
+  private handle?: PlayerHandle
+
+  ngAfterViewInit() {
+    this.handle = mount(this.host.nativeElement, {
+      projectId: 'your-tale-id',
+      apiBase: 'https://stories.example.org'
+    })
+  }
+
+  ngOnDestroy() {
+    this.handle?.unmount()
+  }
+}
+```
+
+Checked once by hand on Angular 22: the component compiles under Angular's strict TypeScript settings, and in the browser it mounts the player into its div. Nothing in this package's CI runs Angular.
 
 **Every other site, including Vue 3 sites below 3.3, Vue 2 sites and React sites below 18,** uses the plain CDN / browser embed. It is the supported path for those sites and needs no npm install. Load the script, then call `TaleswordsPlayer.mount(element, { projectId, apiBase })`:
 
@@ -45,7 +74,7 @@ The package declares `vue` as an optional peer dependency with the range `^3.3.0
 <script src="https://unpkg.com/@taleswords/player/build/player.iife.js"></script>
 ```
 
-The same file is at `https://cdn.jsdelivr.net/npm/@taleswords/player/build/player.iife.js`. Both addresses name the published package, and nothing is published to npm yet, so they answer only after the first release.
+The same file is at `https://cdn.jsdelivr.net/npm/@taleswords/player/build/player.iife.js`. Both addresses serve the latest published release; put a version after the name (`@taleswords/player@0.1.1`) to hold a page to one release.
 
 **npm's refusal on a Vue 2 site is expected.** Measured on npm 12.0.2, installing this package beside vue 2.7.16 fails with `ERESOLVE`, because the peer range does not allow it. Marking the peer optional does not relax the range. npm 7 to 11 were not measured. Such a site, like a Vue 3 site below 3.3, uses the embed above.
 

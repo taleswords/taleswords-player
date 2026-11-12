@@ -13,14 +13,23 @@
  * line with its scene image, portrait, text and choices or continue, then the
  * authored ending or, where the story stops without one, the end-of-road panel
  * with restart. The shell's data-state attribute says where it stands: loading,
- * then ready, unavailable or error. An unavailable settle shows the refusal
- * copy and no story; an error settle leaves the shell empty.
+ * then ready, unavailable, not-ready or error, or dead-end on a line whose every
+ * choice is unavailable, which shows its notice and restart and still settles
+ * ready. An unavailable settle shows its copy ('This story is not available.' by
+ * default) and no story and no control. A not-ready settle shows its copy ('This
+ * story is not ready yet.' by default) and no story and no control. An error
+ * settle shows the error copy ('The story could not be loaded.' by default) and
+ * one enabled 'Start again' control that re-reads the start, and names no cause.
+ * Each copy can be overridden through options.copy.
  */
 
 import type { RuntimeAdvanceRequest, RuntimeCharacterDTO, RuntimeEndingStateDTO, RuntimeLineStateDTO, RuntimeStateDTO } from './contract.js'
 
 /** Where a mounted player stands once its read has settled. */
-export type PlayerState = 'ready' | 'unavailable' | 'error'
+export type PlayerState = 'ready' | 'unavailable' | 'not-ready' | 'error'
+
+/** What the mount's onState option is told after each settled read: a PlayerState, or 'ended' when an ending is shown. */
+export type PlayerHostState = PlayerState | 'ended'
 
 /** What mount returns: the way to take the player down, and its settled state. */
 export type PlayerHandle = {
@@ -33,18 +42,27 @@ export type PlayerCopy = {
     continue: string
     restart: string
     endOfRoad: string
+    deadEnd: string
     unavailable: string
+    notReady: string
     error: string
 }
 
-type MountOptions = { projectId: string; apiBase: string; copy?: Partial<PlayerCopy> | undefined }
+type MountOptions = {
+    projectId: string
+    apiBase: string
+    copy?: Partial<PlayerCopy> | undefined
+    onState?: ((state: PlayerHostState) => void) | undefined
+}
 
 /** The reader's words in English, each overridable through the mount's copy option. */
 const DEFAULT_COPY: PlayerCopy = {
     continue: 'Continue',
     restart: 'Start again',
     endOfRoad: 'The story goes no further from here.',
+    deadEnd: 'The story cannot continue from here.',
     unavailable: 'This story is not available.',
+    notReady: 'This story is not ready yet.',
     error: 'The story could not be loaded.'
 }
 
@@ -53,6 +71,12 @@ const mounted = new WeakMap<Element, PlayerHandle>()
 
 function isNonEmptyString(value: unknown): value is string {
     return typeof value === 'string' && value.length > 0
+}
+
+/** Whether an authored ending carries anything to show: the resolver's hasAuthoredEnding rule, '' empty and whitespace filled. */
+function hasAuthoredContent(ending: RuntimeEndingStateDTO['ending'] | null): boolean {
+    if (ending === undefined || ending === null) return false
+    return isNonEmptyString(ending.title) || isNonEmptyString(ending.text) || Boolean(ending.character) || isNonEmptyString(ending.imageUrl)
 }
 
 /** The default copy, with every string the caller gave for a known key laid over it. */
@@ -67,7 +91,7 @@ function resolveCopy(copy: unknown): PlayerCopy {
 }
 
 /** What one read answered: a state to render, or the state the shell settles in. */
-type ReadResult = { state: 'ready'; body: RuntimeStateDTO } | { state: 'unavailable' | 'error' }
+type ReadResult = { state: 'ready'; body: RuntimeStateDTO } | { state: 'unavailable' | 'not-ready' | 'error' }
 
 function isRuntimeState(body: unknown): body is RuntimeStateDTO {
     if (typeof body !== 'object' || body === null) return false
@@ -76,11 +100,27 @@ function isRuntimeState(body: unknown): body is RuntimeStateDTO {
     return type === 'line' && Array.isArray(choices)
 }
 
-/** One anonymous runtime read. Never rejects: 404 is unavailable, anything else not ok is error. */
+// The runtime's wire code for a published story with no main scene.
+const STORY_NOT_READY_CODE = 'story_not_ready'
+
+/**
+ * One anonymous runtime read. Never rejects: 404 whose errors[0].code is story_not_ready is
+ * not-ready, any other 404 is unavailable, anything else not ok is error.
+ */
 async function read(url: string, init: RequestInit): Promise<ReadResult> {
     try {
         const response = await fetch(url, init)
-        if (response.status === 404) return { state: 'unavailable' }
+        if (response.status === 404) {
+            try {
+                const refusal = (await response.json()) as { errors?: { code?: unknown }[] } | null
+                if (Array.isArray(refusal?.errors) && refusal.errors[0]?.code === STORY_NOT_READY_CODE) {
+                    return { state: 'not-ready' }
+                }
+            } catch {
+                // A 404 body that does not parse is the plain refusal.
+            }
+            return { state: 'unavailable' }
+        }
         if (!response.ok) return { state: 'error' }
         const body: unknown = await response.json()
         if (!isRuntimeState(body)) return { state: 'error' }
@@ -140,7 +180,12 @@ function append(parent: Element, ...children: (Element | null)[]): void {
     for (const child of children) if (child) parent.appendChild(child)
 }
 
-/** A line: scene image, portrait, text, then its choices in order, or one continue. */
+/** A line whose every choice is unavailable: nothing on it moves the story on. */
+function isDeadEnd(state: RuntimeLineStateDTO): boolean {
+    return state.choices.length > 0 && state.choices.every(choice => choice.isUnavailable === true)
+}
+
+/** A line: scene image, portrait, text, then its choices in order, or one continue; a dead end adds the notice and restart. */
 function renderLine(doc: Document, state: RuntimeLineStateDTO, controls: Controls): HTMLElement {
     const view = doc.createElement('div')
     view.setAttribute('data-taleswords-line', '')
@@ -163,16 +208,22 @@ function renderLine(doc: Document, state: RuntimeLineStateDTO, controls: Control
             choices.appendChild(control)
         }
         view.appendChild(choices)
+        if (isDeadEnd(state)) {
+            const notice = doc.createElement('p')
+            notice.setAttribute('data-taleswords-notice', 'dead-end')
+            notice.textContent = controls.copy.deadEnd
+            append(view, notice, button(doc, controls.copy.restart, 'data-taleswords-restart', () => controls.restart()))
+        }
     } else {
         view.appendChild(button(doc, controls.copy.continue, 'data-taleswords-continue', () => controls.advance()))
     }
     return view
 }
 
-/** An ending with a nodeId is authored; one without is the end of the road, offering restart alone. */
+/** An ending whose reason is 'authored' is the author's; any other reason is the end of the road, offering restart alone. */
 function renderEnding(doc: Document, state: RuntimeEndingStateDTO, controls: Controls): HTMLElement {
     const view = doc.createElement('div')
-    if (isNonEmptyString(state.nodeId)) {
+    if (state.reason === 'authored' && hasAuthoredContent(state.ending)) {
         view.setAttribute('data-taleswords-ending', 'authored')
         const ending = state.ending
         append(
@@ -201,6 +252,14 @@ function renderUnavailable(doc: Document, controls: Controls): HTMLElement {
     return view
 }
 
+/** The refusal shown when the story is published without a main scene: the copy alone, no story and no control. */
+function renderNotReady(doc: Document, controls: Controls): HTMLElement {
+    const view = doc.createElement('div')
+    view.setAttribute('data-taleswords-refusal', 'not-ready')
+    append(view, paragraph(doc, controls.copy.notReady, 'data-taleswords-not-ready'))
+    return view
+}
+
 /** The refusal shown when a read fails: the copy and one control that re-reads the start, no cause. */
 function renderError(doc: Document, controls: Controls): HTMLElement {
     const view = doc.createElement('div')
@@ -218,16 +277,21 @@ function renderError(doc: Document, controls: Controls): HTMLElement {
  *
  * Throws a TypeError when the element is not an Element, or when projectId or
  * apiBase is not a non-empty string. A player already mounted on the element
- * is unmounted first. Unknown and unpublished projects both settle
- * 'unavailable' and show the refusal copy: the read cannot tell them apart, by
- * design, so the refusal names no cause. The optional copy
+ * is unmounted first. For a well-formed project id, unknown and unpublished
+ * projects both settle 'unavailable' and show the refusal copy: the read cannot
+ * tell them apart, by design, so the refusal names no cause. An id that is not a
+ * well-formed project id settles 'error' and shows the error view with 'Start
+ * again'. A published story with no main scene
+ * settles 'not-ready' and shows the not-ready copy. The optional copy
  * replaces any of the reader's own words; story text is never replaced.
  */
 export function mount(element: Element, options: MountOptions): PlayerHandle {
     if (typeof Element === 'undefined' || !(element instanceof Element)) {
         throw new TypeError('TaleswordsPlayer.mount: element must be an Element')
     }
-    const { projectId, apiBase, copy } = (options ?? {}) as Partial<MountOptions>
+    const { projectId, apiBase, copy, onState: givenOnState } = (options ?? {}) as Partial<MountOptions>
+    // An onState that is not a function is ignored, as resolveCopy ignores bad copy.
+    const onState = typeof givenOnState === 'function' ? givenOnState : undefined
     if (!isNonEmptyString(projectId)) {
         throw new TypeError('TaleswordsPlayer.mount: projectId must be a non-empty string')
     }
@@ -253,8 +317,16 @@ export function mount(element: Element, options: MountOptions): PlayerHandle {
     })
 
     const base = apiBase.trim().replace(/\/+$/, '')
-    const projectUrl = base + '/api/v1/runtime/projects/' + encodeURIComponent(projectId)
-    const startUrl = projectUrl + '/start'
+    let projectUrl = ''
+    let startUrl = ''
+    let unencodable = false
+    try {
+        projectUrl = base + '/api/v1/runtime/projects/' + encodeURIComponent(projectId)
+        startUrl = projectUrl + '/start'
+    } catch {
+        // An id that cannot be encoded (a lone surrogate) is never sent: every start read settles 'error'.
+        unencodable = true
+    }
 
     let imageBase = ''
     try {
@@ -264,7 +336,9 @@ export function mount(element: Element, options: MountOptions): PlayerHandle {
     }
 
     const readStart = (): Promise<ReadResult> =>
-        read(startUrl, { method: 'GET', credentials: 'omit', signal: controller.signal })
+        unencodable
+            ? Promise.resolve({ state: 'error' })
+            : read(startUrl, { method: 'GET', credentials: 'omit', signal: controller.signal })
 
     const readNext = (state: RuntimeStateDTO, choiceId?: string): Promise<ReadResult> => {
         if (!isNonEmptyString(state.nodeId)) return Promise.resolve({ state: 'error' })
@@ -274,13 +348,14 @@ export function mount(element: Element, options: MountOptions): PlayerHandle {
             rootContainerType: state.rootContainerType
         }
         if (choiceId !== undefined) request.choiceId = choiceId
+        // Mid-walk, not-ready is the plain refusal, as before: only the start read tells it apart.
         return read(projectUrl + '/node/' + encodeURIComponent(state.nodeId) + '/next', {
             method: 'POST',
             credentials: 'omit',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(request),
             signal: controller.signal
-        })
+        }).then((result): ReadResult => (result.state === 'not-ready' ? { state: 'unavailable' } : result))
     }
 
     const controls: Controls = {
@@ -299,18 +374,39 @@ export function mount(element: Element, options: MountOptions): PlayerHandle {
     function show(result: ReadResult): PlayerState {
         if (result.state === 'ready') {
             current = result.body
-            root.replaceChildren(
-                result.body.type === 'ending'
-                    ? renderEnding(doc, result.body, controls)
-                    : renderLine(doc, result.body, controls)
-            )
+            try {
+                root.replaceChildren(
+                    result.body.type === 'ending'
+                        ? renderEnding(doc, result.body, controls)
+                        : renderLine(doc, result.body, controls)
+                )
+            } catch {
+                // A state the player cannot render settles as a failed read does; the error branch clears current.
+                return show({ state: 'error' })
+            }
         } else {
             current = undefined
             if (result.state === 'unavailable') root.replaceChildren(renderUnavailable(doc, controls))
+            else if (result.state === 'not-ready') root.replaceChildren(renderNotReady(doc, controls))
             else root.replaceChildren(renderError(doc, controls))
         }
-        root.setAttribute('data-state', result.state)
+        // A dead-end line marks the shell on its own, yet settles 'ready' like any line.
+        const deadEnd = result.state === 'ready' && result.body.type === 'line' && isDeadEnd(result.body)
+        root.setAttribute('data-state', deadEnd ? 'dead-end' : result.state)
+        // The host is told the state name only: 'ended' for either ending view, else the settled state.
+        const ended = result.state === 'ready' && result.body.type === 'ending'
+        emit(ended ? 'ended' : result.state)
         return result.state
+    }
+
+    /** Tell the host where the player stands; nothing once unmounted, and a host throw never reaches the walk. */
+    function emit(state: PlayerHostState): void {
+        if (!active || !onState) return
+        try {
+            onState(state)
+        } catch {
+            // The host's own failure is the host's: the walk and ready go on unchanged.
+        }
     }
 
     /** One advance or restart at a time; its controls are disabled while it is in flight. */
@@ -318,12 +414,21 @@ export function mount(element: Element, options: MountOptions): PlayerHandle {
         if (!active || busy) return
         busy = true
         for (const control of root.querySelectorAll('button')) control.disabled = true
-        void next().then(result => {
-            busy = false
-            // After unmount a late answer writes nothing.
-            if (!active) return
-            show(result)
-        })
+        let pending: Promise<ReadResult>
+        try {
+            pending = next()
+        } catch {
+            // A read that cannot be built (an id that cannot be encoded) is never sent: it settles 'error'.
+            pending = Promise.resolve({ state: 'error' })
+        }
+        void pending
+            .catch((): ReadResult => ({ state: 'error' }))
+            .then(result => {
+                busy = false
+                // After unmount a late answer writes nothing.
+                if (!active) return
+                show(result)
+            })
     }
 
     void readStart().then(result => {

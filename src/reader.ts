@@ -18,5 +18,5 @@ export const READER_PATH_PATTERN = '/read/:projectId'
  */
 export function readerLink(projectId: string, baseUrl: string): string {
     const base = baseUrl.trim().replace(/\/+$/, '')
-    return `${base}/read/${projectId}`
+    return `${base}/read/${encodeURIComponent(projectId)}`
 }

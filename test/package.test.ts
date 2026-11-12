@@ -9,7 +9,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const buildDir = join(root, 'build')
 
-const ENTRIES = ['index', 'contract', 'reader', 'components', 'browser']
+const ENTRIES = ['index', 'contract', 'reader', 'components', 'browser', 'react']
 const SUFFIXES = ['.js', '.d.ts', '.js.map', '.d.ts.map']
 const BUNDLE = 'player.iife.js'
 const EXPECTED_BUILD_FILES = [...ENTRIES.flatMap((entry) => SUFFIXES.map((suffix) => `${entry}${suffix}`)), BUNDLE].sort()
@@ -61,7 +61,7 @@ describe('@taleswords/player package', () => {
         expect((pkg.publishConfig as { access?: string } | undefined)?.access).toBe('public')
 
         const exportsMap = pkg.exports as Record<string, { types?: string; import?: string }>
-        expect(Object.keys(exportsMap).sort()).toEqual(['.', './browser', './components'])
+        expect(Object.keys(exportsMap).sort()).toEqual(['.', './browser', './components', './react'])
         for (const [subpath, target] of Object.entries(exportsMap)) {
             for (const condition of ['types', 'import'] as const) {
                 const file = target[condition]
@@ -73,13 +73,13 @@ describe('@taleswords/player package', () => {
 
     it('declares vue as an optional peer so an embed-only install takes no Vue', () => {
         const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as PackageJson
-        expect(pkg.peerDependencies).toEqual({ vue: '^3.3.0' })
-        expect(pkg.peerDependenciesMeta).toEqual({ vue: { optional: true } })
+        expect(pkg.peerDependencies).toEqual({ vue: '^3.3.0', react: '^18.0.0 || ^19.0.0' })
+        expect(pkg.peerDependenciesMeta).toEqual({ vue: { optional: true }, react: { optional: true } })
 
         const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8')) as {
             packages: Record<string, PackageJson>
         }
-        expect(lock.packages['']!.peerDependenciesMeta).toEqual({ vue: { optional: true } })
+        expect(lock.packages['']!.peerDependenciesMeta).toEqual({ vue: { optional: true }, react: { optional: true } })
     })
 })
 
@@ -89,5 +89,17 @@ describe('readerLink', () => {
         expect(READER_PATH_PATTERN).toBe('/read/:projectId')
         expect(readerLink('p1', 'https://example.org')).toBe('https://example.org/read/p1')
         expect(readerLink('p1', ' https://example.org/stories// ')).toBe('https://example.org/stories/read/p1')
+    })
+
+    it('encodes a projectId that needs encoding the same way the runtime API call does', async () => {
+        const { readerLink } = await import('../src/reader.js')
+        expect(readerLink('a/b?c#d%e f', 'https://example.org')).toBe('https://example.org/read/a%2Fb%3Fc%23d%25e%20f')
+    })
+
+    it('leaves the link unchanged for an ObjectId-shaped projectId', async () => {
+        const { readerLink } = await import('../src/reader.js')
+        expect(readerLink('507f1f77bcf86cd799439011', 'https://example.org')).toBe(
+            'https://example.org/read/507f1f77bcf86cd799439011'
+        )
     })
 })

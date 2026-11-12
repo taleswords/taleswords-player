@@ -2,9 +2,9 @@
 // Framework components entry: the wrappers around the mount API land here.
 
 import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue'
-import { mount, type PlayerCopy, type PlayerHandle } from './browser.js'
+import { mount, type PlayerCopy, type PlayerHandle, type PlayerHostState } from './browser.js'
 
-export type { PlayerCopy, PlayerHandle, PlayerState } from './browser.js'
+export type { PlayerCopy, PlayerHandle, PlayerState, PlayerHostState } from './browser.js'
 
 /**
  * The Vue 3 player: one div that holds the same reader's walk the static embed
@@ -21,14 +21,20 @@ export const TaleswordsPlayer = defineComponent({
         apiBase: { type: String, required: true },
         copy: { type: Object as PropType<Partial<PlayerCopy>>, required: false }
     },
-    setup(props) {
+    emits: { state: (state: PlayerHostState) => typeof state === 'string' },
+    setup(props, { emit }) {
         const host = ref<HTMLDivElement | null>(null)
         let handle: PlayerHandle | null = null
 
         function mountPlayer(): void {
             if (host.value === null) return
             const { projectId, apiBase, copy } = props
-            handle = mount(host.value, { projectId, apiBase, ...(copy ? { copy } : {}) })
+            handle = mount(host.value, {
+                projectId,
+                apiBase,
+                ...(copy ? { copy } : {}),
+                onState: (state: PlayerHostState) => emit('state', state)
+            })
         }
 
         onMounted(mountPlayer)

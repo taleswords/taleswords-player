@@ -55,9 +55,13 @@ export interface RuntimeLineStateDTO extends RuntimeRootContainer {
     callStack: RuntimeCallStackEntry[]
 }
 
+/** Why a walk ended: 'authored' for an END node's ending, every other value names the runtime stop. */
+export type RuntimeTerminalReason = 'authored' | 'cycle' | 'return-unwound' | 'legacy-end' | 'dangling-edge' | 'step-exhausted' | 'line-dead-end' | 'choice-dead-end' | 'unresolvable-target' | 'empty-container'
+
 /** An ended state (type 'ending'). */
 export interface RuntimeEndingStateDTO extends RuntimeRootContainer {
     type: 'ending'
+    reason: RuntimeTerminalReason
     nodeId?: string | undefined
     isEnded: true
     choices: []
